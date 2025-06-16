@@ -1,0 +1,33 @@
+cat /home/ozadmin/ServerStats.sh
+#!/bin/bash
+ 
+# ----------- Get Date and Time Separately ------------
+DATE=$(date '+%d-%m-%Y')
+TIME=$(date '+%H:%M:%S')
+ 
+# ----------- Call & Channel Stats ------------
+CALLS=$(asterisk -rx "core show calls" | grep "active call" | awk '{print $1}')
+CHANNELS=$(asterisk -rx "core show channels" | grep "active channel" | awk '{print $1}')
+ 
+# ----------- CPU Usage ------------
+top_output=$(top -bn1)
+cpu_idle=$(echo "$top_output" | grep "Cpu(s)" | sed 's/.*, *\([0-9.]*\)%* id.*/\1/')
+CPU_USAGE=$(awk -v idle="$cpu_idle" 'BEGIN { printf("%.0f", 100 - idle) }')
+ 
+# ----------- Memory Usage ------------
+read total_memory available_memory <<< $(awk '/MemTotal/ {t=$2} /MemAvailable/ {a=$2} END {print t, a}' /proc/meminfo)
+used_memory=$((total_memory - available_memory))
+USED_MEMORY_PERCENT=$(awk -v u=$used_memory -v t=$total_memory 'BEGIN { printf("%.0f", (u / t) * 100) }')
+ 
+# ----------- Disk Usage ------------
+df_output=$(df / | awk 'NR==2')
+used_disk_kb=$(echo $df_output | awk '{print $3}')
+size_disk_kb=$(echo $df_output | awk '{print $2}')
+USED_DISK_PERCENT=$(awk -v u=$used_disk_kb -v s=$size_disk_kb 'BEGIN { printf("%.0f", (u/s)*100) }')
+ 
+# ----------- Output Summary ------------
+printf "%-12s %-10s %-10s %-10s %-10s %-15s %-15s\n" "Date" "Time" "Calls" "Channels" "CPU Usage" "Used Memory" "Disk - Used Space"
+printf "%-12s %-10s %-10s %-10s %-10s %-15s %-15s\n" "$DATE" "$TIME" "$CALLS" "$CHANNELS" "${CPU_USAGE}%" "${USED_MEMORY_PERCENT}%" "${USED_DISK_PERCENT}%"
+ 
+# ----------- Optional: Log to file ------------
+echo "$DATE $TIME - Calls: $CALLS, Channels: $CHANNELS, CPU: ${CPU_USAGE}%, Mem: ${USED_MEMORY_PERCENT}%, Disk: ${USED_DISK_PERCENT}%" >> /var/log/call_system_summary.log
